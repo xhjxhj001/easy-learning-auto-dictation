@@ -21,7 +21,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * 使用百度OCR API识别图片中的文字（包含重试机制）
+ * 使用后端代理服务识别图片中的文字（包含重试机制）
  * @param imageFile 图片文件
  * @param retryCount 重试次数
  * @returns 识别出的文字
@@ -31,36 +31,23 @@ export async function recognizeText(imageFile: File, retryCount = 2): Promise<st
   
   const executeRequest = async (currentRetry: number): Promise<string> => {
     try {
-      // 检查API密钥
-      if (!BAIDU_OCR_API_KEY) {
-        throw new Error('未配置百度OCR API密钥');
-      }
-
       const imageBase64 = await fileToBase64(imageFile);
-      const params = new URLSearchParams();
-      params.append('image', imageBase64);
-      params.append('detect_direction', 'false');
-      params.append('detect_language', 'false');
-      params.append('paragraph', 'false');
-      params.append('probability', 'false');
-
+      
+      // 请求我们自己的后端接口
+      console.log('OCR: 正在发送请求到后端代理...');
       const response = await axios({
         method: 'POST',
-        url: BAIDU_OCR_API_URL,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${BAIDU_OCR_API_KEY}`,
+        url: '/api/ocr', // 使用相对路径，Vite 会根据配置转发
+        data: {
+          image: imageBase64
         },
-        data: params.toString(),
-        timeout: 45000, // 增加到 45 秒，给慢速网络更多时间
+        timeout: 45000,
       });
 
       const data = response.data;
       
       if (data.error_code) {
-        // 如果是临时性的网络或并发错误，尝试重试
-        // 常见百度并发错误码: 1, 2, 4, 18
+        // ... (保持重试逻辑不变)
         const retryableCodes = [1, 2, 4, 18];
         if (retryableCodes.includes(data.error_code) && currentRetry > 0) {
           console.warn(`OCR: 收到可重试错误码 ${data.error_code}, 准备重试...`);
@@ -74,16 +61,16 @@ export async function recognizeText(imageFile: File, retryCount = 2): Promise<st
       }
       return '';
     } catch (error) {
-      // 网络超时或连接异常，且还有重试机会
+      // ... (保持重试逻辑不变)
       if (currentRetry > 0) {
-        console.warn('OCR: 网络请求失败，正在进行重试...', error);
-        // 延迟 1 秒后重试
+        console.warn('OCR: 请求失败，正在进行重试...', error);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return executeRequest(currentRetry - 1);
       }
       
-      if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
-        throw new Error('网络请求超时，请检查网络连接或尝试上传更小的图片');
+      if (axios.isAxiosError(error)) {
+        const errorMsg = error.response?.data?.error_msg || error.message;
+        throw new Error(`OCR识别请求失败: ${errorMsg}`);
       }
       throw error;
     }

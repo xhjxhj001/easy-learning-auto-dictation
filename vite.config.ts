@@ -39,6 +39,13 @@ export default defineConfig({
     },
     // 允许所有主机访问
     cors: true,
+    // 配置代理，将前端 /api 请求转发到后端 server.js
+    proxy: {
+      '/api': {
+        target: `http://localhost:${port + 1}`,
+        changeOrigin: true,
+      }
+    }
   },
   // 生产环境外部化依赖
   build: {

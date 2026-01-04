@@ -20,7 +20,15 @@ echo -e "${GREEN}  听写学习应用停止脚本${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# 检查 PID 文件是否存在
+# 停止后端服务
+if [ -f ".server.pid" ]; then
+    SERVER_PID=$(cat .server.pid)
+    echo -e "${YELLOW}正在停止后端服务 (PID: $SERVER_PID)...${NC}"
+    kill $SERVER_PID 2>/dev/null
+    rm -f .server.pid
+fi
+
+# 停止前端服务
 if [ ! -f "$PID_FILE" ]; then
     echo -e "${YELLOW}服务未在运行（PID 文件不存在）${NC}"
     

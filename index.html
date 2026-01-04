@@ -5,14 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>听写学习应用</title>
+    <script>
+      window.PAGELOAD_START = performance.now();
+      console.log('[Performance] 1. HTML 解析开始');
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <!-- 引入核心库 CDN -->
+    <script>console.log('[Performance] 2. 开始加载 CDN 资源...');</script>
     <script src="https://lib.baomitu.com/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://lib.baomitu.com/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://lib.baomitu.com/dayjs/1.11.10/dayjs.min.js"></script>
     <script src="https://lib.baomitu.com/antd/5.12.8/antd.min.js"></script>
+    <script>console.log('[Performance] 3. CDN 资源加载完成, 耗时: ' + (performance.now() - window.PAGELOAD_START).toFixed(2) + 'ms');</script>
     
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -19,8 +19,10 @@ dist-ssr
 
 # App runtime files
 .app.pid
+.server.pid
 .deps.hash
 app.log
+server.log
 
 # Editor directories and files
 .vscode/*

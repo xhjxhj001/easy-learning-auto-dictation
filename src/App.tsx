@@ -35,6 +35,10 @@ const App: React.FC = () => {
 
   // 诊断信息：检查配置是否加载成功
   useEffect(() => {
+    const mountTime = performance.now();
+    const startTime = (window as any).PAGELOAD_START || mountTime;
+    console.log(`[Performance] 5. React 组件挂载完成, 总耗时: ${(mountTime - startTime).toFixed(2)}ms`);
+    
     console.log('App: 听写应用已加载');
     // 检查环境变量
     const apiKey = import.meta.env.VITE_BAIDU_OCR_API_KEY;

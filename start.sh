@@ -138,13 +138,20 @@ echo -e "日志文件: ${GREEN}${LOG_FILE}${NC}"
 echo -e "PID 文件: ${GREEN}${PID_FILE}${NC}"
 echo ""
 
-# 后台启动开发服务器
-echo -e "${YELLOW}正在后台启动开发服务器...${NC}"
+# 计算后端端口
+SERVER_PORT=$((VITE_PORT + 1))
 
-# 使用 nohup 在后台运行，并将输出重定向到日志文件
+# 后台启动后端代理服务
+echo -e "${YELLOW}正在启动后端代理服务 (端口: $SERVER_PORT)...${NC}"
+nohup env SERVER_PORT=$SERVER_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY node server.js > server.log 2>&1 &
+SERVER_PID=$!
+echo $SERVER_PID > .server.pid
+
+# 后台启动 Vite 开发服务器
+echo -e "${YELLOW}正在启动前端开发服务器 (端口: $VITE_PORT)...${NC}"
 nohup env VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev > "$LOG_FILE" 2>&1 &
 
-# 保存 PID
+# 保存前端 PID
 APP_PID=$!
 echo $APP_PID > "$PID_FILE"
 
