@@ -40,12 +40,12 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, disabled 
     console.log('开始压缩图片...');
     
     try {
-      // 压缩图片（如果大于1MB）
+      // 压缩图片（针对慢速网络优化：400KB以内）
       const processedFile = await compressImage(file, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.8,
-        maxSizeKB: 1024, // 压缩到1MB以内
+        maxWidth: 1500,
+        maxHeight: 1500,
+        quality: 0.7,
+        maxSizeKB: 400, 
       });
       
       console.log('图片压缩完成，大小:', processedFile.size);

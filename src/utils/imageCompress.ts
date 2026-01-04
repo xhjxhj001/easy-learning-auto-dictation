@@ -23,10 +23,10 @@ export function compressImage(
     console.log('[compressImage] 开始压缩图片:', file.name, '大小:', file.size);
     
     const {
-      maxWidth = 1920,
-      maxHeight = 1920,
-      quality = 0.8,
-      maxSizeKB = 1024, // 默认1MB
+      maxWidth = 1500, // 从 1920 降至 1500
+      maxHeight = 1500,
+      quality = 0.7,   // 降低初始质量
+      maxSizeKB = 400, // 从 1024 降至 400KB，大幅减少上传量
     } = options;
 
     // 如果文件已经很小，直接返回

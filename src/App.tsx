@@ -20,6 +20,19 @@ const App: React.FC = () => {
   const speakingIndexRef = useRef<number>(-1);
   const timeoutRef = useRef<number | null>(null);
 
+  // 诊断信息：检查配置是否加载成功
+  useEffect(() => {
+    console.log('App: 听写应用已加载');
+    // 检查环境变量
+    const apiKey = import.meta.env.VITE_BAIDU_OCR_API_KEY;
+    if (!apiKey || apiKey === '你的百度OCR_API密钥') {
+      console.error('App: VITE_BAIDU_OCR_API_KEY 未配置或为默认值');
+      message.error('配置错误：未检测到有效的 OCR API Key，请检查 .env 文件并重启服务', 0);
+    } else {
+      console.log('App: OCR API Key 已检测到 (长度: ' + apiKey.length + ')');
+    }
+  }, []);
+
   // 处理图片捕获
   const handleImageCapture = async (file: File) => {
     console.log('App: handleImageCapture 开始, 文件:', file.name, file.size);
@@ -34,11 +47,15 @@ const App: React.FC = () => {
     let hideLoading: (() => void) | null = null;
     
     try {
-      hideLoading = message.loading('正在识别图片，请稍候...', 0);
+      hideLoading = message.loading('正在准备数据并上传...', 0);
       
       console.log('App: 开始OCR识别...');
       // OCR识别
       const text = await recognizeText(file);
+      
+      if (hideLoading) hideLoading();
+      hideLoading = message.loading('数据已送达，正在分析结果...', 0);
+      
       console.log('App: OCR识别结果:', text);
       
       if (!text || text.trim().length === 0) {
