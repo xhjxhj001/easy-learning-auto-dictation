@@ -20,7 +20,6 @@ import './App.css';
 const { TextArea } = Input;
 
 const App: React.FC = () => {
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [words, setWords] = useState<WordItem[]>([]);
   const [fullText, setFullText] = useState<string>('');
   const [selectedWordId, setSelectedWordId] = useState<number | null>(null);
@@ -62,7 +61,6 @@ const App: React.FC = () => {
     console.log('App: handleImageCapture 开始, 文件:', file.name, file.size);
     
     // 先重置状态
-    setImageFile(file);
     setWords([]);
     setFullText('');
     setSelectedWordId(null);

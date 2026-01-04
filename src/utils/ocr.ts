@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { BAIDU_OCR_API_KEY, BAIDU_OCR_API_URL } from '../config';
 
 /**
  * 将图片文件转换为base64字符串
