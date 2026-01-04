@@ -11,7 +11,7 @@ const app = express();
 // 优先读取显式的后端端口，否则使用前端端口+1
 const PORT = process.env.SERVER_PORT || (parseInt(process.env.VITE_PORT || 3000) + 1);
 const BAIDU_API_KEY = process.env.VITE_BAIDU_OCR_API_KEY;
-const BAIDU_OCR_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic';
+const BAIDU_OCR_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic';
 
 // 配置跨域和 Body 解析（处理 base64 大图片）
 app.use(cors());
