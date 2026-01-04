@@ -38,10 +38,18 @@ const WordList: React.FC<WordListProps> = ({ words, onSelectWord, onDeleteWord }
           }}
           onClick={() => onSelectWord(item.id)}
         >
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space style={{ width: '100%', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <Tag
               color={item.selected ? 'blue' : 'default'}
-              style={{ fontSize: '16px', padding: '4px 12px' }}
+              style={{ 
+                fontSize: '16px', 
+                padding: '4px 12px',
+                whiteSpace: 'normal',
+                wordBreak: 'break-all',
+                maxWidth: 'calc(100% - 80px)',
+                lineHeight: '1.5',
+                display: 'inline-block'
+              }}
             >
               {item.text}
             </Tag>
@@ -49,6 +57,7 @@ const WordList: React.FC<WordListProps> = ({ words, onSelectWord, onDeleteWord }
               type="text"
               danger
               icon={<DeleteOutlined />}
+              style={{ flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteWord(item.id);

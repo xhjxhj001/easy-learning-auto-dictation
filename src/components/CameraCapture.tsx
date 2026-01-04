@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Button, Upload, message } from 'antd';
+import { Button, Upload, message, Image } from 'antd';
 import { CameraOutlined, UploadOutlined } from '@ant-design/icons';
 import { compressImage, checkFileSize } from '../utils/imageCompress';
 
@@ -163,16 +163,20 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, disabled 
       </div>
       {preview && (
         <div style={{ marginTop: '10px' }}>
-          <img
+          <Image
             src={preview}
             alt="预览"
             style={{
               maxWidth: '100%',
-              maxHeight: '300px',
+              maxHeight: '200px',
               border: '1px solid #d9d9d9',
               borderRadius: '4px',
+              objectFit: 'contain'
             }}
           />
+          <div style={{ color: '#999', fontSize: '12px', marginTop: '4px' }}>
+            提示：点击图片可放大查看
+          </div>
         </div>
       )}
     </div>
