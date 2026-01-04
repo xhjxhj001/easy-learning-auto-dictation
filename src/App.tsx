@@ -279,11 +279,56 @@ const App: React.FC = () => {
       message.warning('没有可复制的内容');
       return;
     }
-    navigator.clipboard.writeText(fullText).then(() => {
-      message.success('已复制到剪贴板');
-    }).catch(() => {
-      message.error('复制失败');
-    });
+
+    const textToCopy = fullText;
+
+    // 优先使用现代化 Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+          message.success({
+            content: '已成功复制到剪贴板',
+            icon: <CopyOutlined style={{ color: '#52c41a' }} />,
+            duration: 2
+          });
+        })
+        .catch((err) => {
+          console.error('Clipboard API 复制失败:', err);
+          fallbackCopyText(textToCopy);
+        });
+    } else {
+      // 兜底方案：使用传统的 execCommand('copy')
+      fallbackCopyText(textToCopy);
+    }
+  };
+
+  // 兜底复制方法
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      
+      // 确保文本框在移动端不会触发页面跳动
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '0';
+      document.body.appendChild(textArea);
+      
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        message.success('复制成功（兼容模式）');
+      } else {
+        message.error('复制失败，请手动长选文字复制');
+      }
+    } catch (err) {
+      console.error('兜底复制失败:', err);
+      message.error('无法自动复制，请手动选择文字复制');
+    }
   };
 
   // 组件卸载时清理
