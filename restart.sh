@@ -19,6 +19,8 @@ echo ""
 
 # 是否强制更新依赖
 FORCE_UPDATE=false
+# 启动模式
+START_FLAGS=""
 
 # 解析参数
 while [[ $# -gt 0 ]]; do
@@ -27,11 +29,16 @@ while [[ $# -gt 0 ]]; do
             FORCE_UPDATE=true
             shift
             ;;
+        -p|--prod)
+            START_FLAGS="$START_FLAGS --prod"
+            shift
+            ;;
         -h|--help)
             echo "用法: ./restart.sh [选项]"
             echo ""
             echo "选项:"
             echo "  -u, --update    强制更新依赖（即使 package.json 没有变化）"
+            echo "  -p, --prod      以生产模式重启"
             echo "  -h, --help      显示帮助信息"
             echo ""
             exit 0
@@ -59,6 +66,6 @@ sleep 2
 
 # 启动服务
 echo ""
-echo -e "${YELLOW}正在启动服务...${NC}"
-"$SCRIPT_DIR/start.sh"
+echo -e "${YELLOW}正在启动服务 (参数: $START_FLAGS)...${NC}"
+"$SCRIPT_DIR/start.sh" $START_FLAGS
 

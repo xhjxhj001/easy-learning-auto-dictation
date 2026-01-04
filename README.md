@@ -5,31 +5,37 @@
 ## 功能特性
 
 1. **拍照识别**：支持拍照或上传图片进行 OCR 文字识别
-2. **智能切词**：自动将识别结果切分成词语列表，按顺序排列
-   - 智能合并因折行拆分的词语
-   - 正确识别中英文混合文本
-3. **词语管理**：
-   - 默认选中第一个词语
-   - 支持点击选择其他词语
-   - 支持删除选中的词语
-4. **听写功能**：
-   - 从选中的词语开始按顺序朗读
-   - 可设置朗读间隔时间（1-60秒）
-   - 支持暂停/继续功能
-   - 支持停止听写
-5. **图片压缩**：
-   - 自动压缩大图片，避免 OCR API 超限
-   - 支持最大 10MB 图片上传
+   - 支持图片自动压缩（针对慢速网络优化）
+   - 支持预览图点击放大查看
+2. **切词听写模式**：
+   - 自动将识别结果切分成词语列表，按顺序排列
+   - 智能合并因折行拆分的词语，支持中英文混合
+   - 支持词语管理：手动选择起始点、删除无关词语
+   - 支持自动朗读：设置间隔时间（1-60秒），支持暂停/继续
+3. **全文 OCR 朗读模式**：
+   - 展示 OCR 识别的完整文本
+   - 支持文本手动编辑校对
+   - 支持一键复制全文到剪贴板
+   - 支持全文一键朗读
+4. **移动端优化**：
+   - 禁止页面缩放和左右横滑，适配单手操作
+   - 拍照区域置顶，操作更顺手
+   - 词语过长自动折行展示
+   - 增加「回到顶部」功能（文字链接 + 悬浮按钮）
+5. **高性能与安全性**：
+   - **后端代理**：API Key 保存在服务端，前端不直接暴露密钥，更安全
+   - **生产模式**：支持一键构建生产包，使用 CDN 加速，加载时间从 10s+ 降至 1s 内
+   - **移动端调试**：内置 vConsole，支持在手机上查看调试日志和性能分析
+6. **性能监控**：内置页面加载全链路耗时监控，支持在控制台查看性能瓶颈
 
 ## 技术栈
 
-- React 18
-- TypeScript
-- Vite 5
-- Ant Design 5
-- 百度 OCR API（OCR 识别）
-- Axios（HTTP 请求）
-- Web Speech API（文本转语音）
+- **前端**：React 18, TypeScript, Vite 5, Ant Design 5
+- **后端**：Node.js, Express (作为 OCR 代理)
+- **OCR 服务**：百度 OCR API
+- **调试工具**：vConsole
+- **网络库**：Axios
+- **语音合成**：Web Speech API
 
 ## 项目结构
 
@@ -37,24 +43,21 @@
 learning-app-1/
 ├── src/
 │   ├── components/
-│   │   ├── CameraCapture.tsx    # 拍照/上传组件
-│   │   └── WordList.tsx         # 词语列表组件
-│   ├── config/
-│   │   └── index.ts             # 应用配置
+│   │   ├── CameraCapture.tsx    # 拍照/上传组件（支持预览放大）
+│   │   └── WordList.tsx         # 词语列表组件（支持折行展示）
 │   ├── utils/
-│   │   ├── imageCompress.ts     # 图片压缩工具
-│   │   ├── ocr.ts               # OCR 识别工具
-│   │   ├── tts.ts               # 语音合成工具
-│   │   └── wordSegment.ts       # 切词工具
-│   ├── App.tsx                  # 主应用组件
-│   ├── App.css                  # 应用样式
-│   ├── main.tsx                 # 入口文件
-│   └── index.css                # 全局样式
-├── start.sh                     # 启动脚本
-├── stop.sh                      # 停止脚本
-├── restart.sh                   # 重启脚本
-├── package.json
-├── vite.config.ts
+│   │   ├── imageCompress.ts     # 图片压缩（400KB 阈值优化）
+│   │   ├── ocr.ts               # 前端 OCR 请求封装
+│   │   ├── tts.ts               # 语音合成
+│   │   └── wordSegment.ts       # 智能切词逻辑
+│   ├── App.tsx                  # 主应用（包含 Tab 切换逻辑）
+│   └── main.tsx                 # 入口（包含 vConsole 初始化）
+├── server.js                    # 后端代理服务（安全性保障）
+├── start.sh                     # 启动脚本（支持 -p 生产模式）
+├── stop.sh                      # 停止脚本（同时停止前后端）
+├── restart.sh                   # 重启脚本（支持 -p 模式切换）
+├── .env                         # 环境变量配置
+├── vite.config.ts               # Vite 配置（包含 Proxy 转发）
 └── README.md
 ```
 
@@ -62,48 +65,56 @@ learning-app-1/
 
 ### 1. 配置环境
 
-在项目根目录创建 `.env` 文件：
+在项目根目录创建 `.env` 文件（或参考 `env.example`）：
 
 ```bash
-# 百度OCR API密钥（必填）
-# 请到 https://console.bce.baidu.com/ai/#/ai/ocr/overview/index 申请
+# 百度OCR API密钥（必选）
 VITE_BAIDU_OCR_API_KEY=你的百度OCR_API密钥
 
 # 服务监听端口（可选，默认3000）
 VITE_PORT=3000
+
+# 是否开启移动端调试面板 vConsole（可选，true/false）
+VITE_ENABLE_VCONSOLE=true
 ```
 
 ### 2. 启动服务
 
 ```bash
-# 赋予脚本执行权限（首次运行）
-chmod +x start.sh stop.sh restart.sh
+# 赋予权限
+chmod +x *.sh
 
-# 启动服务（后台运行）
+# 模式 A：开发模式（适合修改代码，支持热更新）
 ./start.sh
-```
 
-启动脚本会自动：
-- 校验配置文件
-- 检测并安装/更新依赖
-- 后台启动服务
-- 输出访问地址和管理命令
+# 模式 B：生产模式（适合手机使用，速度极快）
+./start.sh -p
+```
 
 ### 3. 管理服务
 
 ```bash
-# 查看日志
-tail -f app.log
+# 重启到生产模式
+./restart.sh -p
 
-# 停止服务
+# 停止所有服务
 ./stop.sh
 
-# 重启服务
-./restart.sh
-
-# 重启并强制更新依赖
-./restart.sh -u
+# 查看实时日志
+tail -f app.log     # 前端日志
+tail -f server.log  # 后端 OCR 日志
 ```
+
+## 常见问题
+
+### Q: 为什么手机加载很慢？
+A: 在开发模式下，Vite 会加载数百个小文件。请使用 `./start.sh -p` 切换到**生产模式**，它会开启 CDN 加速和代码压缩，加载速度通常在 1s 以内。
+
+### Q: OCR 识别报错 500？
+A: 请检查 `server.log`。通常是因为 `.env` 中的 API Key 配置错误，或者后端端口冲突（脚本会自动使用 VITE_PORT + 1 端口）。
+
+### Q: 如何在手机上调试？
+A: 在 `.env` 中设置 `VITE_ENABLE_VCONSOLE=true` 并重启，页面右下角会出现绿色的「vConsole」按钮，点击即可查看控制台日志。
 
 ## 代码更新说明
 

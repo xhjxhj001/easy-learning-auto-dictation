@@ -17,8 +17,24 @@ PID_FILE="$SCRIPT_DIR/.app.pid"
 LOG_FILE="$SCRIPT_DIR/app.log"
 DEPS_HASH_FILE="$SCRIPT_DIR/.deps.hash"
 
+# 默认模式
+MODE="dev"
+
+# 解析参数
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--prod)
+            MODE="prod"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  听写学习应用启动脚本${NC}"
+echo -e "${GREEN}  听写学习应用启动脚本 [模式: $MODE]${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -131,12 +147,25 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  启动信息${NC}"
 echo -e "${GREEN}========================================${NC}"
+echo -e "运行模式: ${GREEN}${MODE}${NC}"
 echo -e "监听地址: ${GREEN}0.0.0.0${NC}"
 echo -e "监听端口: ${GREEN}${VITE_PORT}${NC}"
 echo -e "允许访问: ${GREEN}所有域名${NC}"
 echo -e "日志文件: ${GREEN}${LOG_FILE}${NC}"
 echo -e "PID 文件: ${GREEN}${PID_FILE}${NC}"
 echo ""
+
+# 如果是生产模式，先构建
+if [ "$MODE" = "prod" ]; then
+    echo -e "${YELLOW}正在构建生产环境包...${NC}"
+    npm run build
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}构建失败，请检查错误${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}构建成功！${NC}"
+    echo ""
+fi
 
 # 计算后端端口
 SERVER_PORT=$((VITE_PORT + 1))
@@ -147,9 +176,14 @@ nohup env SERVER_PORT=$SERVER_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KE
 SERVER_PID=$!
 echo $SERVER_PID > .server.pid
 
-# 后台启动 Vite 开发服务器
-echo -e "${YELLOW}正在启动前端开发服务器 (端口: $VITE_PORT)...${NC}"
-nohup env VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev > "$LOG_FILE" 2>&1 &
+# 根据模式启动前端
+if [ "$MODE" = "prod" ]; then
+    echo -e "${YELLOW}正在启动生产环境预览服务 (端口: $VITE_PORT)...${NC}"
+    nohup npx vite preview --port $VITE_PORT --host 0.0.0.0 > "$LOG_FILE" 2>&1 &
+else
+    echo -e "${YELLOW}正在启动开发环境服务器 (端口: $VITE_PORT)...${NC}"
+    nohup env VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev > "$LOG_FILE" 2>&1 &
+fi
 
 # 保存前端 PID
 APP_PID=$!
