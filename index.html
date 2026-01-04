@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>听写学习应用</title>
     <script>
+              // 紧急错误处理
+              window.onerror = function (msg, url, line) {
+                console.error('[Fatal Error]', msg, url, line);
+                // 如果是生产环境白屏，很可能是 React 没加载成功
+                if (msg.indexOf('React is not defined') > -1) {
+                  alert('核心库加载失败，请检查网络或刷新重试');
+                }
+                return false;
+              };
+
       window.PAGELOAD_START = performance.now();
           window.PERF_LOGS = [];
           function logPerf(msg) {
@@ -19,26 +29,17 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- 仅在生产环境（通过域名访问）时使用 CDN，开发环境禁止加载，避免干扰和重复 -->
+    <!-- 性能监控 -->
     <script>
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (!isDev) {
-        logPerf('2. 开始加载 CDN 资源...');
-        const scripts = [
-          "https://lib.baomitu.com/react/18.2.0/umd/react.production.min.js",
-          "https://lib.baomitu.com/react-dom/18.2.0/umd/react-dom.production.min.js",
-          "https://lib.baomitu.com/dayjs/1.11.10/dayjs.min.js",
-          "https://lib.baomitu.com/antd/5.12.8/antd.min.js"
-        ];
-        scripts.forEach(src => {
-          document.write('<script src="' + src + '"><\/script>');
+          // 这里的 logPerf 依然有效，可以记录 Vite 打包后的加载耗时
+          window.addEventListener('load', () => {
+            logPerf('3. 页面完全加载完成');
+            if (window.PERF_LOGS) {
+              console.log('--- 性能日志回放 ---');
+              window.PERF_LOGS.forEach(log => console.log(log));
+            }
         });
-        window.addEventListener('load', () => logPerf('3. CDN 资源加载完成'));
-      } else {
-        logPerf('2. 开发环境跳过 CDN 加载');
-      }
-    </script>
-    
+</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

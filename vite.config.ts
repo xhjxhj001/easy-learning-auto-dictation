@@ -47,20 +47,14 @@ export default defineConfig({
       }
     }
   },
-  // 生产环境外部化依赖
+  // 生产环境优化
   build: {
     rollupOptions: {
-      external: ['react', 'react-dom', 'antd', 'dayjs'],
       output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-          antd: 'antd',
-          dayjs: 'dayjs',
-        },
-        // 清理不再需要的 manualChunks
+        // 依然进行代码分割，将大型库分块以利用浏览器缓存
         manualChunks: {
-          'icons-vendor': ['@ant-design/icons'],
+          'react-vendor': ['react', 'react-dom'],
+          'antd-vendor': ['antd', '@ant-design/icons'],
           'axios-vendor': ['axios'],
         },
       },
