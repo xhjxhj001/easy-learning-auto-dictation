@@ -71,8 +71,13 @@ export default defineConfig({
   // 依赖预构建优化 (开发模式)
   optimizeDeps: {
     include: [
-      '@ant-design/icons',
+      'react',
+      'react-dom',
+      'antd',
       'axios',
+      '@ant-design/icons',
+      'vconsole',
+      'dayjs'
     ],
   },
 })
