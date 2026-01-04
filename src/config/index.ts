@@ -7,5 +7,5 @@
 export const BAIDU_OCR_API_KEY = import.meta.env.VITE_BAIDU_OCR_API_KEY || '';
 
 // 百度OCR API地址
-export const BAIDU_OCR_API_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic';
+export const BAIDU_OCR_API_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic';
 
