@@ -266,14 +266,17 @@ const App: React.FC = () => {
             <h3>3. 听写设置</h3>
             <Space>
               <span>朗读间隔（秒）：</span>
-              <InputNumber
-                min={1}
-                max={60}
-                value={intervalSeconds}
-                onChange={(value) => setIntervalSeconds(value || 3)}
-                disabled={isSpeaking}
-                addonBefore={<SettingOutlined />}
-              />
+              <Space.Compact>
+                <Button disabled icon={<SettingOutlined />} style={{ backgroundColor: '#f5f5f5', color: '#666' }} />
+                <InputNumber
+                  min={1}
+                  max={60}
+                  style={{ width: '80px' }}
+                  value={intervalSeconds}
+                  onChange={(value) => setIntervalSeconds(value || 3)}
+                  disabled={isSpeaking}
+                />
+              </Space.Compact>
             </Space>
           </div>
 

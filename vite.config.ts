@@ -40,34 +40,32 @@ export default defineConfig({
     // 允许所有主机访问
     cors: true,
   },
-  // 依赖预构建优化 - 加快首次加载
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'antd',
-      '@ant-design/icons',
-      'axios',
-    ],
-  },
-  // 构建优化
+  // 生产环境外部化依赖
   build: {
-    // 代码分割
     rollupOptions: {
+      external: ['react', 'react-dom', 'antd', 'dayjs'],
       output: {
+        globals: {
+          react: 'React',
+          'react-dom': 'ReactDOM',
+          antd: 'antd',
+          dayjs: 'dayjs',
+        },
+        // 清理不再需要的 manualChunks
         manualChunks: {
-          // 将React相关库打包到一个chunk
-          'react-vendor': ['react', 'react-dom'],
-          // 将Antd相关库打包到一个chunk
-          'antd-vendor': ['antd', '@ant-design/icons'],
-          // 将axios单独打包
+          'icons-vendor': ['@ant-design/icons'],
           'axios-vendor': ['axios'],
         },
       },
     },
-    // 启用CSS代码分割
     cssCodeSplit: true,
-    // 设置chunk大小警告阈值
     chunkSizeWarningLimit: 1000,
+  },
+  // 依赖预构建优化 (开发模式)
+  optimizeDeps: {
+    include: [
+      '@ant-design/icons',
+      'axios',
+    ],
   },
 })
