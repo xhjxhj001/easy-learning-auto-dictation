@@ -50,18 +50,25 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, disabled 
       
       console.log('图片压缩完成，大小:', processedFile.size);
 
-      // 显示预览
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        console.log('预览图片加载完成');
-        setPreview(e.target?.result as string);
-      };
-      reader.onerror = (e) => {
-        console.error('预览图片加载失败:', e);
-      };
-      reader.readAsDataURL(processedFile);
+      // 先设置预览图片（等待完成后再调用回调）
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          console.log('预览图片加载完成');
+          const result = e.target?.result as string;
+          resolve(result);
+        };
+        reader.onerror = (e) => {
+          console.error('预览图片加载失败:', e);
+          reject(new Error('预览图片加载失败'));
+        };
+        reader.readAsDataURL(processedFile);
+      });
 
-      // 调用回调
+      // 设置预览
+      setPreview(previewUrl);
+
+      // 预览设置完成后再调用回调
       console.log('调用 onImageCapture 回调...');
       onImageCapture(processedFile);
       console.log('onImageCapture 回调完成');

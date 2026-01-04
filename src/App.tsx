@@ -24,22 +24,24 @@ const App: React.FC = () => {
   const handleImageCapture = async (file: File) => {
     console.log('App: handleImageCapture 开始, 文件:', file.name, file.size);
     
+    // 先重置状态
     setImageFile(file);
-    setIsProcessing(true);
     setWords([]);
     setSelectedWordId(null);
+    setIsProcessing(true);
     
     // 显示处理提示
-    const hideLoading = message.loading('正在识别图片，请稍候...', 0);
+    let hideLoading: (() => void) | null = null;
     
     try {
+      hideLoading = message.loading('正在识别图片，请稍候...', 0);
+      
       console.log('App: 开始OCR识别...');
       // OCR识别
       const text = await recognizeText(file);
       console.log('App: OCR识别结果:', text);
       
       if (!text || text.trim().length === 0) {
-        hideLoading();
         message.warning('未识别到文字，请确保图片清晰且包含文字');
         return;
       }
@@ -50,7 +52,6 @@ const App: React.FC = () => {
       console.log('App: 切词结果:', wordTexts);
       
       if (wordTexts.length === 0) {
-        hideLoading();
         message.warning('未能提取到词语，请重试');
         return;
       }
@@ -64,15 +65,17 @@ const App: React.FC = () => {
       
       setWords(wordItems);
       setSelectedWordId(0);
-      hideLoading();
       message.success(`识别成功，共找到 ${wordItems.length} 个词语`);
     } catch (error) {
-      hideLoading();
       console.error('App: 图片处理错误:', error);
       const errorMessage = error instanceof Error ? error.message : '处理失败，请重试';
       message.error(errorMessage);
     } finally {
-      console.log('App: handleImageCapture 完成');
+      // 确保 loading 消息被关闭
+      if (hideLoading) {
+        hideLoading();
+      }
+      console.log('App: handleImageCapture 完成, 重置 isProcessing');
       setIsProcessing(false);
     }
   };
