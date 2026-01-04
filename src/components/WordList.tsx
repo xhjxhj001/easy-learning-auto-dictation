@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, Button, Space, Tag } from 'antd';
+import { Button } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 
 export interface WordItem {
