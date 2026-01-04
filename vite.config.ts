@@ -49,13 +49,12 @@ export default defineConfig({
   },
   // 生产环境优化
   build: {
-    // 禁用 CSS 代码分割可以减少一些构建开销
+    // 禁用 CSS 压缩，防止 esbuild 在资源受限环境下崩溃
+    cssMinify: false,
     cssCodeSplit: false,
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        // 简化分块策略，只把 node_modules 里的东西打成一个大包
-        // 这样可以减少渲染 Chunk 时的计算量
         manualChunks(id) {
           if (id.includes('node_modules')) {
             return 'vendor';
