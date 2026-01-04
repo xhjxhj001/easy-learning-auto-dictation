@@ -49,18 +49,20 @@ export default defineConfig({
   },
   // 生产环境优化
   build: {
+    // 禁用 CSS 代码分割可以减少一些构建开销
+    cssCodeSplit: false,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        // 依然进行代码分割，将大型库分块以利用浏览器缓存
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'antd-vendor': ['antd', '@ant-design/icons'],
-          'axios-vendor': ['axios'],
-        },
+        // 简化分块策略，只把 node_modules 里的东西打成一个大包
+        // 这样可以减少渲染 Chunk 时的计算量
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        }
       },
     },
-    cssCodeSplit: true,
-    chunkSizeWarningLimit: 1000,
   },
   // 依赖预构建优化 (开发模式)
   optimizeDeps: {
