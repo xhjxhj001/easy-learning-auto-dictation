@@ -35,9 +35,16 @@ const App: React.FC = () => {
 
   // 诊断信息：检查配置是否加载成功
   useEffect(() => {
-    const mountTime = performance.now();
-    const startTime = (window as any).PAGELOAD_START || mountTime;
-    console.log(`[Performance] 5. React 组件挂载完成, 总耗时: ${(mountTime - startTime).toFixed(2)}ms`);
+    if ((window as any).logPerf) {
+      (window as any).logPerf('5. React 组件挂载完成');
+    }
+
+    // 在 vConsole 准备好后，回放所有性能日志
+    if ((window as any).PERF_LOGS) {
+      console.log('--- 历史性能数据回放开始 ---');
+      (window as any).PERF_LOGS.forEach((log: string) => console.log(log));
+      console.log('--- 历史性能数据回放结束 ---');
+    }
     
     console.log('App: 听写应用已加载');
     // 检查环境变量
