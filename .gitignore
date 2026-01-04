@@ -17,6 +17,11 @@ dist-ssr
 .env.local
 .env.*.local
 
+# App runtime files
+.app.pid
+.deps.hash
+app.log
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

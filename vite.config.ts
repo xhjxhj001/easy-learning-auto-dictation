@@ -32,6 +32,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: port,
     strictPort: false,
+    // 允许所有域名访问（解决 "Blocked request" 错误）
+    allowedHosts: true,
     hmr: {
       clientPort: port,
     },

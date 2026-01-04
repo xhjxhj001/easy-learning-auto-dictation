@@ -2,16 +2,38 @@
 
 # 听写学习应用启动脚本
 
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# PID 文件和日志文件
+PID_FILE="$SCRIPT_DIR/.app.pid"
+LOG_FILE="$SCRIPT_DIR/app.log"
+DEPS_HASH_FILE="$SCRIPT_DIR/.deps.hash"
+
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  听写学习应用启动脚本${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
+
+# 检查是否已经在运行
+if [ -f "$PID_FILE" ]; then
+    OLD_PID=$(cat "$PID_FILE")
+    if ps -p "$OLD_PID" > /dev/null 2>&1; then
+        echo -e "${YELLOW}服务已在运行中 (PID: $OLD_PID)${NC}"
+        echo -e "${YELLOW}如需重启，请先运行 ./stop.sh 或 ./restart.sh${NC}"
+        exit 0
+    else
+        # PID 文件存在但进程不存在，清理
+        rm -f "$PID_FILE"
+    fi
+fi
 
 # 检查.env文件是否存在
 if [ ! -f .env ]; then
@@ -28,8 +50,8 @@ EOF
     exit 1
 fi
 
-# 加载并导出环境变量（关键：使用 export 使变量对子进程可见）
-set -a  # 自动导出所有变量
+# 加载并导出环境变量
+set -a
 source ./.env
 set +a
 
@@ -47,12 +69,11 @@ else
     echo -e "${GREEN}✓ VITE_BAIDU_OCR_API_KEY 已配置${NC}"
 fi
 
-# 检查端口号（可选，有默认值）
+# 检查端口号
 if [ -z "$VITE_PORT" ]; then
     export VITE_PORT=3000
     echo -e "${YELLOW}⚠ VITE_PORT 未设置，使用默认值: 3000${NC}"
 else
-    # 验证端口号是否为数字
     if ! [[ "$VITE_PORT" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}✗ 错误: VITE_PORT 必须是数字${NC}"
         MISSING_CONFIG=true
@@ -73,14 +94,35 @@ echo ""
 echo -e "${GREEN}配置校验通过！${NC}"
 echo ""
 
-# 检查node_modules是否存在
+# 计算 package.json 的 hash，用于检测依赖变化
+CURRENT_DEPS_HASH=$(md5sum package.json 2>/dev/null | cut -d' ' -f1 || md5 -q package.json 2>/dev/null)
+
+# 检查是否需要安装/更新依赖
+NEED_INSTALL=false
+
 if [ ! -d "node_modules" ]; then
-    echo -e "${YELLOW}检测到 node_modules 不存在，正在安装依赖...${NC}"
+    echo -e "${YELLOW}检测到 node_modules 不存在${NC}"
+    NEED_INSTALL=true
+elif [ -f "$DEPS_HASH_FILE" ]; then
+    OLD_DEPS_HASH=$(cat "$DEPS_HASH_FILE")
+    if [ "$CURRENT_DEPS_HASH" != "$OLD_DEPS_HASH" ]; then
+        echo -e "${YELLOW}检测到 package.json 已更新，需要重新安装依赖${NC}"
+        NEED_INSTALL=true
+    fi
+else
+    # 没有 hash 文件，首次运行
+    NEED_INSTALL=true
+fi
+
+if [ "$NEED_INSTALL" = true ]; then
+    echo -e "${YELLOW}正在安装依赖...${NC}"
     npm install
     if [ $? -ne 0 ]; then
         echo -e "${RED}依赖安装失败，请检查网络连接和npm配置${NC}"
         exit 1
     fi
+    # 保存当前 hash
+    echo "$CURRENT_DEPS_HASH" > "$DEPS_HASH_FILE"
     echo -e "${GREEN}依赖安装完成${NC}"
     echo ""
 fi
@@ -92,10 +134,38 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "监听地址: ${GREEN}0.0.0.0${NC}"
 echo -e "监听端口: ${GREEN}${VITE_PORT}${NC}"
 echo -e "允许访问: ${GREEN}所有域名${NC}"
-echo ""
-echo -e "${YELLOW}正在启动开发服务器...${NC}"
+echo -e "日志文件: ${GREEN}${LOG_FILE}${NC}"
+echo -e "PID 文件: ${GREEN}${PID_FILE}${NC}"
 echo ""
 
-# 启动开发服务器（使用 env 命令确保环境变量传递）
-VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev
+# 后台启动开发服务器
+echo -e "${YELLOW}正在后台启动开发服务器...${NC}"
 
+# 使用 nohup 在后台运行，并将输出重定向到日志文件
+nohup env VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev > "$LOG_FILE" 2>&1 &
+
+# 保存 PID
+APP_PID=$!
+echo $APP_PID > "$PID_FILE"
+
+# 等待一下，检查进程是否成功启动
+sleep 2
+
+if ps -p $APP_PID > /dev/null 2>&1; then
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}  服务启动成功！${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "进程 PID: ${GREEN}${APP_PID}${NC}"
+    echo -e "访问地址: ${GREEN}http://localhost:${VITE_PORT}${NC}"
+    echo ""
+    echo -e "${YELLOW}管理命令：${NC}"
+    echo -e "  查看日志: ${GREEN}tail -f ${LOG_FILE}${NC}"
+    echo -e "  停止服务: ${GREEN}./stop.sh${NC}"
+    echo -e "  重启服务: ${GREEN}./restart.sh${NC}"
+    echo ""
+else
+    echo -e "${RED}服务启动失败，请查看日志文件: ${LOG_FILE}${NC}"
+    rm -f "$PID_FILE"
+    exit 1
+fi
