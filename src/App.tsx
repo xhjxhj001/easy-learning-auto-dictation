@@ -27,14 +27,27 @@ const App: React.FC = () => {
     setWords([]);
     setSelectedWordId(null);
     
+    // 显示处理提示
+    const hideLoading = message.loading('正在识别图片，请稍候...', 0);
+    
     try {
       // OCR识别
       const text = await recognizeText(file);
       console.log('OCR识别结果:', text);
       
+      if (!text || text.trim().length === 0) {
+        message.warning('未识别到文字，请确保图片清晰且包含文字');
+        return;
+      }
+      
       // 切词处理
       const wordTexts = segmentWords(text);
       console.log('切词结果:', wordTexts);
+      
+      if (wordTexts.length === 0) {
+        message.warning('未能提取到词语，请重试');
+        return;
+      }
       
       // 创建词语列表
       const wordItems: WordItem[] = wordTexts.map((text, index) => ({
@@ -45,9 +58,13 @@ const App: React.FC = () => {
       
       setWords(wordItems);
       setSelectedWordId(0);
+      hideLoading();
       message.success(`识别成功，共找到 ${wordItems.length} 个词语`);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '处理失败');
+      hideLoading();
+      console.error('图片处理错误:', error);
+      const errorMessage = error instanceof Error ? error.message : '处理失败，请重试';
+      message.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
