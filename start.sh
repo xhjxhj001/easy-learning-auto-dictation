@@ -28,8 +28,10 @@ EOF
     exit 1
 fi
 
-# 加载环境变量
-source .env
+# 加载并导出环境变量（关键：使用 export 使变量对子进程可见）
+set -a  # 自动导出所有变量
+source ./.env
+set +a
 
 # 校验必需的配置项
 echo -e "${GREEN}正在校验配置文件...${NC}"
@@ -55,6 +57,7 @@ else
         echo -e "${RED}✗ 错误: VITE_PORT 必须是数字${NC}"
         MISSING_CONFIG=true
     else
+        export VITE_PORT
         echo -e "${GREEN}✓ VITE_PORT 已配置: $VITE_PORT${NC}"
     fi
 fi
@@ -93,6 +96,6 @@ echo ""
 echo -e "${YELLOW}正在启动开发服务器...${NC}"
 echo ""
 
-# 启动开发服务器
-npm run dev
+# 启动开发服务器（使用 env 命令确保环境变量传递）
+VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev
 
