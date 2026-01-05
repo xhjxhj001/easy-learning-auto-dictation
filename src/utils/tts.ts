@@ -4,10 +4,100 @@ let currentAudio: HTMLAudioElement | null = null;
 let currentRequestId: number = 0;
 let currentAudioContext: AudioContext | null = null;
 let currentPCMPlayer: PCMStreamPlayer | null = null;
+let currentXHR: XMLHttpRequest | null = null;
 
 // PCM 音频参数（根据阿里云 Qwen-TTS 文档）
 const PCM_SAMPLE_RATE = 24000; // 采样率
 const PCM_CHANNELS = 1; // 单声道
+
+// TTS 服务单次请求最大字节数（阿里云限制 600 字节）
+const MAX_TEXT_BYTES = 580; // 留一点余量
+
+/**
+ * 计算字符串的 UTF-8 字节长度
+ */
+function getByteLength(str: string): number {
+  return new Blob([str]).size;
+}
+
+/**
+ * 将长文本分割成多个片段，每个片段不超过最大字节数
+ * 智能分割：优先在句子结束处分割，其次在其他标点处分割
+ * 支持中英文混合文本
+ */
+function splitTextForTTS(text: string, maxBytes: number = MAX_TEXT_BYTES): string[] {
+  if (getByteLength(text) <= maxBytes) {
+    return [text];
+  }
+
+  const segments: string[] = [];
+  let remaining = text;
+
+  // 主要分隔符（句子结束）- 中英文
+  const primaryDelimiters = /([。！？.!?]+)/;
+  // 次要分隔符（句内停顿）- 中英文
+  const secondaryDelimiters = /([，；：、,;:]+)/;
+
+  while (remaining.length > 0) {
+    if (getByteLength(remaining) <= maxBytes) {
+      segments.push(remaining);
+      break;
+    }
+
+    // 估算字符数上限（中文约3字节，英文1字节，取中间值2）
+    const estimatedCharLimit = Math.floor(maxBytes / 2);
+    let endIndex = Math.min(remaining.length, estimatedCharLimit);
+
+    // 调整 endIndex 确保字节数不超过限制
+    while (endIndex > 0 && getByteLength(remaining.substring(0, endIndex)) > maxBytes) {
+      endIndex--;
+    }
+
+    const chunk = remaining.substring(0, endIndex);
+    let splitIndex = -1;
+
+    // 优先在主要分隔符处分割（从后往前找）
+    const primaryMatches = [...chunk.matchAll(new RegExp(primaryDelimiters, 'g'))];
+    if (primaryMatches.length > 0) {
+      const lastMatch = primaryMatches[primaryMatches.length - 1];
+      splitIndex = lastMatch.index! + lastMatch[0].length;
+    }
+
+    // 如果没找到主要分隔符，或分割点太靠前，尝试次要分隔符
+    const minSplitRatio = 0.3;
+    if (splitIndex === -1 || splitIndex < endIndex * minSplitRatio) {
+      const secondaryMatches = [...chunk.matchAll(new RegExp(secondaryDelimiters, 'g'))];
+      if (secondaryMatches.length > 0) {
+        const lastMatch = secondaryMatches[secondaryMatches.length - 1];
+        const secondarySplitIndex = lastMatch.index! + lastMatch[0].length;
+        if (secondarySplitIndex > splitIndex) {
+          splitIndex = secondarySplitIndex;
+        }
+      }
+    }
+
+    // 如果还是没找到合适的分割点，尝试在空格处分割（英文）
+    if (splitIndex === -1 || splitIndex < endIndex * minSplitRatio) {
+      const spaceIndex = chunk.lastIndexOf(' ');
+      if (spaceIndex > endIndex * minSplitRatio) {
+        splitIndex = spaceIndex + 1;
+      }
+    }
+
+    // 最后的兜底：强制分割
+    if (splitIndex === -1 || splitIndex < endIndex * minSplitRatio) {
+      splitIndex = endIndex;
+    }
+
+    const segment = remaining.substring(0, splitIndex).trim();
+    if (segment.length > 0) {
+      segments.push(segment);
+    }
+    remaining = remaining.substring(splitIndex).trim();
+  }
+
+  return segments.filter(s => s.length > 0);
+}
 
 /**
  * PCM 流式播放器类
@@ -193,19 +283,26 @@ function speakWithWeb(text: string, requestId: number): Promise<void> {
 /**
  * 使用阿里 Qwen-TTS 引擎朗读文本 (真正的流式播放)
  * 使用 Web Audio API 实时播放 PCM 音频数据
+ * 支持长文本自动分段，多次请求无缝播放
  */
 async function speakWithQwen(text: string, voice: string | undefined, requestId: number): Promise<void> {
   try {
+    // 分割长文本
+    const segments = splitTextForTTS(text);
+    const totalSegments = segments.length;
+
+    if (totalSegments > 1) {
+      console.log(`TTS: 文本过长 (${text.length} 字符)，已分割为 ${totalSegments} 段`);
+    }
     console.log(`TTS: 正在通过 Qwen-TTS 合成语音 (流式模式)... (音色: ${voice || '默认'})`);
 
     return new Promise((resolve, reject) => {
-      let processedLength = 0;
-      let sseBuffer = ''; // 用于缓存跨 chunk 的不完整 SSE 数据
       let pcmPlayer: PCMStreamPlayer | null = null;
       let audioContext: AudioContext | null = null;
-      let chunkCount = 0;
+      let totalChunkCount = 0;
 
       const cleanup = () => {
+        currentXHR = null;
         if (pcmPlayer) {
           pcmPlayer.stop();
           pcmPlayer = null;
@@ -217,7 +314,7 @@ async function speakWithQwen(text: string, voice: string | undefined, requestId:
         currentPCMPlayer = null;
       };
 
-      // 初始化 Web Audio API
+      // 初始化 Web Audio API（只初始化一次，多段共享）
       const initAudio = () => {
         if (!audioContext) {
           audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -226,6 +323,7 @@ async function speakWithQwen(text: string, voice: string | undefined, requestId:
           currentPCMPlayer = pcmPlayer;
 
           pcmPlayer.onEnd(() => {
+            console.log(`TTS: 所有音频播放完成，共 ${totalSegments} 段，${totalChunkCount} 个音频块`);
             cleanup();
             resolve();
           });
@@ -233,97 +331,128 @@ async function speakWithQwen(text: string, voice: string | undefined, requestId:
         return pcmPlayer!;
       };
 
-      // 解析 SSE 文本并处理 PCM 音频数据
-      const parseSSEChunk = (newText: string) => {
-        // 将新数据追加到缓冲区
-        sseBuffer += newText;
-
-        // 按换行符分割，处理完整的行
-        const lines = sseBuffer.split('\n');
-
-        // 保留最后一个可能不完整的行
-        sseBuffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
-
-          const dataStr = trimmed.slice(5).trim();
-          if (dataStr === '[DONE]') {
-            console.log('TTS: 收到 [DONE] 信号');
-            continue;
+      // 处理单个文本段的 TTS 请求
+      const processSegment = (segmentText: string, segmentIndex: number) => {
+        return new Promise<void>((segmentResolve, segmentReject) => {
+          if (requestId !== currentRequestId) {
+            segmentResolve();
+            return;
           }
 
-          try {
-            const json = JSON.parse(dataStr);
+          let processedLength = 0;
+          let sseBuffer = '';
+          let segmentChunkCount = 0;
 
-            // 处理流式 PCM 音频数据
-            if (json.output?.audio?.data) {
-              const player = initAudio();
-              player.addPCMChunk(json.output.audio.data);
-              chunkCount++;
-              if (chunkCount % 5 === 0) {
-                console.log(`TTS: 已处理 ${chunkCount} 个音频块`);
+          // 解析 SSE 文本并处理 PCM 音频数据
+          const parseSSEChunk = (newText: string) => {
+            sseBuffer += newText;
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+              const dataStr = trimmed.slice(5).trim();
+              if (dataStr === '[DONE]') continue;
+
+              try {
+                const json = JSON.parse(dataStr);
+
+                if (json.output?.audio?.data) {
+                  const player = initAudio();
+                  player.addPCMChunk(json.output.audio.data);
+                  segmentChunkCount++;
+                  totalChunkCount++;
+                }
+
+                if (json.code && json.message) {
+                  console.error('TTS: 服务端返回错误:', json.code, json.message);
+                }
+              } catch (e) {
+                // 忽略解析失败
               }
             }
+          };
 
-            if (json.code && json.message) {
-              console.error('TTS: 服务端返回错误:', json.code, json.message);
+          const xhr = new XMLHttpRequest();
+          currentXHR = xhr;
+          xhr.open('POST', '/api/tts', true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+
+          xhr.onprogress = () => {
+            if (requestId !== currentRequestId) {
+              xhr.abort();
+              return;
             }
-          } catch (e) {
-            // JSON 解析失败，可能是不完整的数据，记录但不报错
-            if (dataStr.length > 0 && dataStr !== ':') {
-              console.warn('TTS: JSON 解析失败，数据长度:', dataStr.length);
+
+            const responseText = xhr.responseText;
+            const newText = responseText.substring(processedLength);
+            processedLength = responseText.length;
+
+            if (newText) {
+              parseSSEChunk(newText);
             }
-          }
-        }
+          };
+
+          xhr.onload = () => {
+            currentXHR = null;
+
+            if (requestId !== currentRequestId) {
+              segmentResolve();
+              return;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              // 处理剩余数据
+              const responseText = xhr.responseText;
+              const newText = responseText.substring(processedLength);
+              if (newText) {
+                parseSSEChunk(newText);
+              }
+              if (sseBuffer.trim()) {
+                parseSSEChunk('\n');
+              }
+
+              console.log(`TTS: 第 ${segmentIndex + 1}/${totalSegments} 段完成，${segmentChunkCount} 个音频块`);
+              segmentResolve();
+            } else {
+              console.error('TTS: XHR 请求失败:', xhr.status);
+              segmentReject(new Error(`TTS request failed: ${xhr.status}`));
+            }
+          };
+
+          xhr.onerror = () => {
+            currentXHR = null;
+            console.error('TTS: XHR 网络错误');
+            segmentReject(new Error('Network error'));
+          };
+
+          xhr.ontimeout = () => {
+            currentXHR = null;
+            console.error('TTS: XHR 超时');
+            segmentReject(new Error('Timeout'));
+          };
+
+          xhr.timeout = 60000;
+          xhr.send(JSON.stringify({ text: segmentText, voice, stream: true }));
+        });
       };
 
-      // 使用 XMLHttpRequest 处理流式响应
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/tts', true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
+      // 顺序处理所有文本段
+      const processAllSegments = async () => {
+        try {
+          for (let i = 0; i < segments.length; i++) {
+            if (requestId !== currentRequestId) {
+              cleanup();
+              resolve();
+              return;
+            }
 
-      xhr.onprogress = () => {
-        if (requestId !== currentRequestId) {
-          xhr.abort();
-          cleanup();
-          return;
-        }
-
-        // 获取新增的响应文本
-        const responseText = xhr.responseText;
-        const newText = responseText.substring(processedLength);
-        processedLength = responseText.length;
-
-        if (newText) {
-          parseSSEChunk(newText);
-        }
-      };
-
-      xhr.onload = () => {
-        if (requestId !== currentRequestId) {
-          cleanup();
-          resolve();
-          return;
-        }
-
-        console.log('TTS: XHR 请求完成，状态:', xhr.status, '总共处理:', chunkCount, '个音频块');
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          // 处理可能遗留的最后一部分数据
-          const responseText = xhr.responseText;
-          const newText = responseText.substring(processedLength);
-          if (newText) {
-            parseSSEChunk(newText);
+            await processSegment(segments[i], i);
           }
 
-          // 处理缓冲区中可能剩余的数据
-          if (sseBuffer.trim()) {
-            parseSSEChunk('\n'); // 触发处理最后一行
-          }
-
-          // 标记流结束，等待播放完成
+          // 所有段处理完成，标记流结束
           if (pcmPlayer) {
             pcmPlayer.markStreamEnd();
           } else {
@@ -331,36 +460,19 @@ async function speakWithQwen(text: string, voice: string | undefined, requestId:
             console.warn('TTS: 没有收到音频数据，降级到 Web Speech API');
             speakWithWeb(text, requestId).then(resolve).catch(reject);
           }
-        } else {
-          console.error('TTS: XHR 请求失败:', xhr.status, xhr.statusText, xhr.responseText);
+        } catch (error) {
+          console.error('TTS: 处理分段时出错:', error);
           cleanup();
           // 降级到 Web Speech API
-          speakWithWeb(text, requestId).then(resolve).catch(reject);
+          if (requestId === currentRequestId) {
+            speakWithWeb(text, requestId).then(resolve).catch(reject);
+          } else {
+            resolve();
+          }
         }
       };
 
-      xhr.onerror = () => {
-        console.error('TTS: XHR 网络错误');
-        cleanup();
-        if (requestId === currentRequestId) {
-          speakWithWeb(text, requestId).then(resolve).catch(reject);
-        } else {
-          resolve();
-        }
-      };
-
-      xhr.ontimeout = () => {
-        console.error('TTS: XHR 超时');
-        cleanup();
-        if (requestId === currentRequestId) {
-          speakWithWeb(text, requestId).then(resolve).catch(reject);
-        } else {
-          resolve();
-        }
-      };
-
-      xhr.timeout = 60000;
-      xhr.send(JSON.stringify({ text, voice, stream: true }));
+      processAllSegments();
     });
   } catch (error) {
     if (requestId !== currentRequestId) return;
@@ -386,6 +498,12 @@ export function stopSpeaking(): void {
     currentAudio.pause();
     currentAudio.currentTime = 0;
     currentAudio = null;
+  }
+
+  // 中断正在进行的 XHR 请求
+  if (currentXHR) {
+    currentXHR.abort();
+    currentXHR = null;
   }
 
   // 停止 PCM 流式播放
