@@ -28,7 +28,7 @@ app.get('/api/health', (req, res) => {
 // Qwen-TTS 代理接口
 app.post('/api/tts', async (req, res) => {
   console.log('[Server] 收到 TTS 请求');
-  const { text, voice = 'Cherry' } = req.body;
+  const { text, voice = 'Cherry', stream = false } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: '文本不能为空' });
@@ -40,45 +40,89 @@ app.post('/api/tts', async (req, res) => {
   }
 
   try {
-    console.log('[Server] 正在请求 Qwen-TTS API, 文本长度:', text.length);
-    const response = await axios({
-      method: 'POST',
-      url: QWEN_TTS_URL,
-      headers: {
-        'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'X-DashScope-SSE': 'disable' // 显式禁用流式，确保获取完整 JSON
-      },
-      data: {
-        model: 'qwen3-tts-flash-2025-11-27',
-        input: {
-          text: text,
-          voice: voice,
-          language_type: 'Chinese'
-        },
-        parameters: {
-          audio_format: 'mp3'
-        }
-      },
-      timeout: 15000,
-    });
+    console.log('[Server] 正在请求 Qwen-TTS API, 模式:', stream ? '流式' : '非流式', '文本长度:', text.length);
 
-    if (response.data && response.data.output && response.data.output.audio && response.data.output.audio.url) {
-      console.log('[Server] Qwen-TTS 响应成功, URL:', response.data.output.audio.url);
-      res.json({ audio_url: response.data.output.audio.url });
+    const requestData = {
+      model: 'qwen3-tts-flash-2025-11-27',
+      input: {
+        text: text,
+        voice: voice,
+        language_type: 'Chinese'
+      },
+      parameters: {
+        audio_format: 'mp3'
+      }
+    };
+
+    if (stream) {
+      // 流式模式配置
+      console.log('[Server] 发起阿里云流式请求...');
+      const response = await axios({
+        method: 'POST',
+        url: QWEN_TTS_URL,
+        headers: {
+          'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+          'Content-Type': 'application/json',
+          'X-DashScope-SSE': 'enable'
+        },
+        data: requestData,
+        responseType: 'stream'
+      });
+
+      console.log('[Server] 阿里云响应状态:', response.status);
+
+      // 设置响应头为 SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      // 将阿里返回的流直接转发给前端
+      response.data.pipe(res);
+
+      response.data.on('end', () => {
+        console.log('[Server] Qwen-TTS 流式响应正常结束');
+      });
+
+      response.data.on('error', (err) => {
+        console.error('[Server] Qwen-TTS 流读取发生错误:', err);
+        if (!res.headersSent) {
+          res.status(500).end();
+        }
+      });
+
     } else {
-      console.error('[Server] Qwen-TTS 返回异常:', JSON.stringify(response.data));
-      res.status(500).json({ error: '语音合成失败', details: response.data });
+      // 非流式模式逻辑保持不变
+      const response = await axios({
+        method: 'POST',
+        url: QWEN_TTS_URL,
+        headers: {
+          'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+          'Content-Type': 'application/json',
+          'X-DashScope-SSE': 'disable'
+        },
+        data: requestData,
+        timeout: 60000,
+      });
+
+      if (response.data && response.data.output && response.data.output.audio && response.data.output.audio.url) {
+        console.log('[Server] Qwen-TTS 响应成功, URL:', response.data.output.audio.url);
+        res.json({ audio_url: response.data.output.audio.url });
+      } else {
+        console.error('[Server] Qwen-TTS 返回异常:', JSON.stringify(response.data));
+        res.status(500).json({ error: '语音合成失败', details: response.data });
+      }
     }
   } catch (error) {
     const errorDetail = error.response ? error.response.data : error.message;
     console.error('[Server] Qwen-TTS 请求失败:', JSON.stringify(errorDetail));
     const status = error.response ? error.response.status : 500;
-    res.status(status).json({
-      error: '语音合成服务异常',
-      message: error.message,
-      details: errorDetail
-    });
+    if (!res.headersSent) {
+      res.status(status).json({
+        error: '语音合成服务异常',
+        message: error.message,
+        details: errorDetail
+      });
+    }
   }
 });
 
