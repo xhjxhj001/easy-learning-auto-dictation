@@ -99,6 +99,17 @@ else
     fi
 fi
 
+# 检查 TTS 引擎
+if [ "$VITE_TTS_ENGINE" = "qwen" ]; then
+    echo -e "${GREEN}✓ 语音引擎已设置为: Qwen-TTS${NC}"
+    if [ -z "$DASHSCOPE_API_KEY" ] || [ "$DASHSCOPE_API_KEY" = "你的阿里云API密钥" ]; then
+        echo -e "${RED}✗ 错误: 设置了 qwen 引擎但未配置 DASHSCOPE_API_KEY${NC}"
+        MISSING_CONFIG=true
+    fi
+else
+    echo -e "${YELLOW}ℹ 语音引擎使用默认 Web Speech API${NC}"
+fi
+
 # 如果有配置缺失，退出
 if [ "$MISSING_CONFIG" = true ]; then
     echo ""
@@ -170,9 +181,17 @@ fi
 # 计算后端端口
 SERVER_PORT=$((VITE_PORT + 1))
 
+# 导出所有必要的环境变量给子进程
+export SERVER_PORT
+export VITE_BAIDU_OCR_API_KEY
+export DASHSCOPE_API_KEY
+export VITE_TTS_ENGINE
+export VITE_PORT
+export VITE_ENABLE_VCONSOLE
+
 # 后台启动后端代理服务
 echo -e "${YELLOW}正在启动后端代理服务 (端口: $SERVER_PORT)...${NC}"
-nohup env SERVER_PORT=$SERVER_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY node server.js > server.log 2>&1 &
+nohup node server.js > server.log 2>&1 &
 SERVER_PID=$!
 echo $SERVER_PID > .server.pid
 
@@ -182,7 +201,7 @@ if [ "$MODE" = "prod" ]; then
     nohup npx vite preview --port $VITE_PORT --host 0.0.0.0 > "$LOG_FILE" 2>&1 &
 else
     echo -e "${YELLOW}正在启动开发环境服务器 (端口: $VITE_PORT)...${NC}"
-    nohup env VITE_PORT=$VITE_PORT VITE_BAIDU_OCR_API_KEY=$VITE_BAIDU_OCR_API_KEY npm run dev > "$LOG_FILE" 2>&1 &
+    nohup npm run dev > "$LOG_FILE" 2>&1 &
 fi
 
 # 保存前端 PID

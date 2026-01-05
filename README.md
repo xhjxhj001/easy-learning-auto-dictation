@@ -71,6 +71,12 @@ learning-app-1/
 # 百度OCR API密钥（必选）
 VITE_BAIDU_OCR_API_KEY=你的百度OCR_API密钥
 
+# 阿里云 DashScope API Key (可选，使用 Qwen-TTS 时必填)
+DASHSCOPE_API_KEY=你的阿里云API密钥
+
+# 语音合成引擎配置 (web 或 qwen，默认 web)
+VITE_TTS_ENGINE=web
+
 # 服务监听端口（可选，默认3000）
 VITE_PORT=3000
 

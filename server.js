@@ -11,7 +11,9 @@ const app = express();
 // 优先读取显式的后端端口，否则使用前端端口+1
 const PORT = process.env.SERVER_PORT || (parseInt(process.env.VITE_PORT || 3000) + 1);
 const BAIDU_API_KEY = process.env.VITE_BAIDU_OCR_API_KEY;
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY;
 const BAIDU_OCR_URL = 'https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic';
+const QWEN_TTS_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 
 // 配置跨域和 Body 解析（处理 base64 大图片）
 app.use(cors());
@@ -20,7 +22,64 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 健康检查
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'OCR Proxy Server is running' });
+  res.json({ status: 'ok', message: 'Proxy Server is running' });
+});
+
+// Qwen-TTS 代理接口
+app.post('/api/tts', async (req, res) => {
+  console.log('[Server] 收到 TTS 请求');
+  const { text, voice = 'Cherry' } = req.body;
+
+  if (!text) {
+    return res.status(400).json({ error: '文本不能为空' });
+  }
+
+  if (!DASHSCOPE_API_KEY) {
+    console.error('[Server] 未配置 DASHSCOPE_API_KEY');
+    return res.status(500).json({ error: '服务器未配置 DashScope API Key' });
+  }
+
+  try {
+    console.log('[Server] 正在请求 Qwen-TTS API, 文本长度:', text.length);
+    const response = await axios({
+      method: 'POST',
+      url: QWEN_TTS_URL,
+      headers: {
+        'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+        'X-DashScope-SSE': 'disable' // 显式禁用流式，确保获取完整 JSON
+      },
+      data: {
+        model: 'qwen3-tts-flash-2025-11-27',
+        input: {
+          text: text,
+          voice: voice,
+          language_type: 'Chinese'
+        },
+        parameters: {
+          audio_format: 'mp3'
+        }
+      },
+      timeout: 15000,
+    });
+
+    if (response.data && response.data.output && response.data.output.audio && response.data.output.audio.url) {
+      console.log('[Server] Qwen-TTS 响应成功, URL:', response.data.output.audio.url);
+      res.json({ audio_url: response.data.output.audio.url });
+    } else {
+      console.error('[Server] Qwen-TTS 返回异常:', JSON.stringify(response.data));
+      res.status(500).json({ error: '语音合成失败', details: response.data });
+    }
+  } catch (error) {
+    const errorDetail = error.response ? error.response.data : error.message;
+    console.error('[Server] Qwen-TTS 请求失败:', JSON.stringify(errorDetail));
+    const status = error.response ? error.response.status : 500;
+    res.status(status).json({
+      error: '语音合成服务异常',
+      message: error.message,
+      details: errorDetail
+    });
+  }
 });
 
 // OCR 代理接口

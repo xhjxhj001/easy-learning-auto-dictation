@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Button, InputNumber, Space, message, Spin, Tabs, Input, Tooltip, FloatButton } from 'antd';
+import { Card, Button, InputNumber, Space, message, Spin, Tabs, Input, Tooltip, FloatButton, Select } from 'antd';
 import { 
   PlayCircleOutlined, 
   PauseCircleOutlined, 
@@ -8,7 +8,8 @@ import {
   SoundOutlined,
   FileTextOutlined,
   FontSizeOutlined,
-  VerticalAlignTopOutlined
+  VerticalAlignTopOutlined,
+  CustomerServiceOutlined
 } from '@ant-design/icons';
 import CameraCapture from './components/CameraCapture';
 import WordList, { WordItem } from './components/WordList';
@@ -19,6 +20,59 @@ import './App.css';
 
 const { TextArea } = Input;
 
+// 音色列表配置（根据提供的最新文档）
+const VOICE_OPTIONS = [
+  { label: '芊悦', value: 'Cherry' },
+  { label: '苏瑶', value: 'Serena' },
+  { label: '晨煦', value: 'Ethan' },
+  { label: '千雪', value: 'Chelsie' },
+  { label: '茉兔', value: 'Momo' },
+  { label: '十三', value: 'Vivian' },
+  { label: '月白', value: 'Moon' },
+  { label: '四月', value: 'Maia' },
+  { label: '凯', value: 'Kai' },
+  { label: '不吃鱼', value: 'Nofish' },
+  { label: '萌宝', value: 'Bella' },
+  { label: '詹妮弗', value: 'Jennifer' },
+  { label: '甜茶', value: 'Ryan' },
+  { label: '卡捷琳娜', value: 'Katerina' },
+  { label: '艾登', value: 'Aiden' },
+  { label: '沧明子', value: 'Eldric Sage' },
+  { label: '乖小妹', value: 'Mia' },
+  { label: '沙小弥', value: 'Mochi' },
+  { label: '燕铮莺', value: 'Bellona' },
+  { label: '田叔', value: 'Vincent' },
+  { label: '萌小姬', value: 'Bunny' },
+  { label: '阿闻', value: 'Neil' },
+  { label: '墨讲师', value: 'Elias' },
+  { label: '徐大爷', value: 'Arthur' },
+  { label: '邻家妹妹', value: 'Nini' },
+  { label: '诡婆婆', value: 'Ebona' },
+  { label: '小婉', value: 'Seren' },
+  { label: '顽屁小孩', value: 'Pip' },
+  { label: '少女阿月', value: 'Stella' },
+  { label: '博德加', value: 'Bodega' },
+  { label: '索尼莎', value: 'Sonrisa' },
+  { label: '阿列克', value: 'Alek' },
+  { label: '多尔切', value: 'Dolce' },
+  { label: '素熙', value: 'Sohee' },
+  { label: '小野杏', value: 'Ono Anna' },
+  { label: '莱恩', value: 'Lenn' },
+  { label: '埃米尔安', value: 'Emilien' },
+  { label: '安德雷', value: 'Andre' },
+  { label: '拉迪奥·戈尔', value: 'Radio Gol' },
+  { label: '上海-阿珍', value: 'Jada' },
+  { label: '北京-晓东', value: 'Dylan' },
+  { label: '南京-老李', value: 'Li' },
+  { label: '陕西-秦川', value: 'Marcus' },
+  { label: '闽南-阿杰', value: 'Roy' },
+  { label: '天津-李彼得', value: 'Peter' },
+  { label: '四川-晴儿', value: 'Sunny' },
+  { label: '四川-程川', value: 'Eric' },
+  { label: '粤语-阿强', value: 'Rocky' },
+  { label: '粤语-阿清', value: 'Kiki' },
+];
+
 const App: React.FC = () => {
   const [words, setWords] = useState<WordItem[]>([]);
   const [fullText, setFullText] = useState<string>('');
@@ -28,9 +82,12 @@ const App: React.FC = () => {
   const [intervalSeconds, setIntervalSeconds] = useState<number>(3);
   const [isPaused, setIsPaused] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('1');
+  const [selectedVoice, setSelectedVoice] = useState<string>('Cherry');
   
   const speakingIndexRef = useRef<number>(-1);
   const timeoutRef = useRef<number | null>(null);
+  const isSpeakingRef = useRef<boolean>(false);
+  const playbackIdRef = useRef<number>(0);
 
   // 诊断信息：检查配置是否加载成功
   useEffect(() => {
@@ -48,6 +105,9 @@ const App: React.FC = () => {
     console.log('App: 听写应用已加载');
     // 检查环境变量
     const apiKey = import.meta.env.VITE_BAIDU_OCR_API_KEY;
+    const ttsEngine = import.meta.env.VITE_TTS_ENGINE;
+    console.log(`App: 当前语音引擎配置为 [${ttsEngine || 'web (默认)'}]`);
+
     if (!apiKey || apiKey === '你的百度OCR_API密钥') {
       console.error('App: VITE_BAIDU_OCR_API_KEY 未配置或为默认值');
       message.error('配置错误：未检测到有效的 OCR API Key，请检查 .env 文件并重启服务', 0);
@@ -171,11 +231,15 @@ const App: React.FC = () => {
         clearTimeout(timeoutRef.current);
       }
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      playbackIdRef.current++; // 停止当前播放实例
       setIsPaused(false);
       return;
     }
 
     setIsSpeaking(true);
+    isSpeakingRef.current = true;
+    const currentPlaybackId = ++playbackIdRef.current; // 生成新的播放实例 ID
     setIsPaused(false);
     
     // 从选中的词语开始
@@ -183,17 +247,19 @@ const App: React.FC = () => {
     speakingIndexRef.current = startIndex;
 
     // 开始朗读流程
-    await speakWordsFromIndex(startIndex);
+    await speakWordsFromIndex(startIndex, currentPlaybackId);
   };
 
   // 从指定索引开始朗读词语
-  const speakWordsFromIndex = async (startIndex: number) => {
-    if (isPaused) {
+  const speakWordsFromIndex = async (startIndex: number, currentPlaybackId: number) => {
+    // 检查是否是当前合法的播放实例
+    if (isPaused || !isSpeakingRef.current || currentPlaybackId !== playbackIdRef.current) {
       return;
     }
 
     for (let i = startIndex; i < words.length; i++) {
-      if (isPaused) {
+      // 每一轮循环都严格检查实例 ID 和停止标志
+      if (isPaused || !isSpeakingRef.current || currentPlaybackId !== playbackIdRef.current) {
         speakingIndexRef.current = i;
         break;
       }
@@ -206,8 +272,13 @@ const App: React.FC = () => {
 
       try {
         // 朗读当前词语
-        await speakText(word.text);
-        
+        await speakText(word.text, selectedVoice);
+
+        // 朗读完成后再次检查，防止在朗读期间被停止
+        if (!isSpeakingRef.current || currentPlaybackId !== playbackIdRef.current) {
+          break;
+        }
+
         // 如果不是最后一个词语，等待指定时间间隔
         if (i < words.length - 1 && !isPaused) {
           await new Promise<void>((resolve) => {
@@ -217,15 +288,20 @@ const App: React.FC = () => {
           });
         }
       } catch (error) {
+        // 如果实例已失效，不报错
+        if (currentPlaybackId !== playbackIdRef.current || !isSpeakingRef.current) {
+          break;
+        }
         console.error('朗读失败:', error);
         message.error('朗读失败');
         break;
       }
     }
 
-    // 朗读完成
-    if (!isPaused) {
+    // 只有当前活跃的实例且未暂停时，才清理全局朗读状态
+    if (!isPaused && isSpeakingRef.current && currentPlaybackId === playbackIdRef.current) {
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
       speakingIndexRef.current = -1;
       message.success('听写完成');
     }
@@ -238,7 +314,8 @@ const App: React.FC = () => {
       setIsPaused(false);
       const currentIndex = speakingIndexRef.current;
       if (currentIndex >= 0 && currentIndex < words.length) {
-        speakWordsFromIndex(currentIndex);
+        // 继续时也传入当前的实例 ID
+        speakWordsFromIndex(currentIndex, playbackIdRef.current);
       }
     } else {
       // 暂停
@@ -247,6 +324,7 @@ const App: React.FC = () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      // 注意：暂停不增加 playbackId，因为稍后还要在同一实例中继续
     }
   };
 
@@ -260,16 +338,26 @@ const App: React.FC = () => {
     if (isSpeaking) {
       stopSpeaking();
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      playbackIdRef.current++;
       return;
     }
 
     setIsSpeaking(true);
+    isSpeakingRef.current = true;
+    const currentPlaybackId = ++playbackIdRef.current;
+
     try {
-      await speakText(fullText);
+      await speakText(fullText, selectedVoice);
     } catch (error) {
-      message.error('朗读失败');
+      if (isSpeakingRef.current && currentPlaybackId === playbackIdRef.current) {
+        message.error('朗读失败');
+      }
     } finally {
-      setIsSpeaking(false);
+      if (currentPlaybackId === playbackIdRef.current) {
+        setIsSpeaking(false);
+        isSpeakingRef.current = false;
+      }
     }
   };
 
@@ -353,6 +441,24 @@ const App: React.FC = () => {
     </div>
   );
 
+  const ttsEngine = import.meta.env.VITE_TTS_ENGINE;
+  const isQwen = ttsEngine === 'qwen';
+
+  const commonVoiceSetting = isQwen && (
+    <div style={{ marginBottom: '15px' }}>
+      <Space>
+        <span><CustomerServiceOutlined /> 选择音色：</span>
+        <Select
+          defaultValue="Cherry"
+          style={{ width: 180 }}
+          onChange={(value) => setSelectedVoice(value)}
+          options={VOICE_OPTIONS}
+          disabled={isSpeaking}
+        />
+      </Space>
+    </div>
+  );
+
   const items = [
     {
       key: '1',
@@ -370,6 +476,7 @@ const App: React.FC = () => {
           <div>
             <h3>2. 听写设置与控制</h3>
             <Space direction="vertical" style={{ width: '100%' }}>
+              {commonVoiceSetting}
               <Space>
                 <span>朗读间隔（秒）：</span>
                 <Space.Compact>
@@ -450,6 +557,7 @@ const App: React.FC = () => {
 
           <div>
             <h3>2. OCR 全文结果（可编辑）</h3>
+            {commonVoiceSetting}
             <TextArea
               rows={10}
               value={fullText}
@@ -498,6 +606,8 @@ const App: React.FC = () => {
             setActiveTab(key);
             stopSpeaking();
             setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            playbackIdRef.current++;
             setIsPaused(false);
           }}
           items={items}
